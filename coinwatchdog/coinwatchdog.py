@@ -104,10 +104,46 @@ async def websocket_listener():
             await asyncio.sleep(1)
 
 
+def cli():
+    p = argparse.ArgumentParser(
+        description=("ETL pipeline tool for coinbase market data")
+    )
+    # p.add_argument(
+    #     "--database",
+    #     "-db",
+    #     type=str,
+    #     default=None,
+    #     dest="database",
+    #     help="Path to sqlite database to connect to"
+    # )
+    p.add_argument(
+        "--log",
+        "-l",
+        type=str,
+        default=None,
+        dest="logfile",
+        help="Path to output log file"
+    )
+    p.add_argument(
+        "--debug",
+        action="store_true",
+        default=False,
+        dest="debug",
+        help="Engage debug mode for logging"
+    )
+    # p.add_argument(
+    #     "--version",
+    #     action="version",
+    #     version=f"%(prog)s {VERSION}"
+    # )
+    argp = p.parse_args()
+    return argp
+
+
 def main(opts: argparse.Namespace):
     level = logging.INFO
-    # if opts.debug is True:
-    #     level = logging.DEBUG
+    if opts.debug is True:
+        level = logging.DEBUG
 
     logging.basicConfig(stream=sys.stdout,
                         level=level,
@@ -121,4 +157,5 @@ def main(opts: argparse.Namespace):
 
 
 if __name__ == '__main__':
-    main(None)
+    opts = cli()
+    main(opts)
