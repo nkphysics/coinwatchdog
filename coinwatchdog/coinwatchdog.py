@@ -145,6 +145,12 @@ def main(opts: argparse.Namespace):
     if opts.debug is True:
         level = logging.DEBUG
 
+    if opts.logfile is not None:
+        filelog = logging.FileHandler(pl.Path(opts.logfile).resolve())
+        fmat = logging.Formatter('%(asctime)s %(levelname)-8s %(message)s')
+        filelog.setFormatter(fmat)
+        logger.addHandler(filelog)
+
     logging.basicConfig(stream=sys.stdout,
                         level=level,
                         format='%(asctime)s %(levelname)-8s %(message)s',
