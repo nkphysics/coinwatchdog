@@ -1,14 +1,37 @@
-
+import pathlib as pl
+import argparse
+import logging
+import sys
+import os
+from importlib.metadata import version
+import sqlite3
 import asyncio
 import json
 import websockets
 
+
+COINWATCHDOG = os.path.basename(sys.argv[0])
+# VERSION = version('COINWATCHDOG')
+logger = logging.getLogger(COINWATCHDOG)
 
 URI = 'wss://ws-feed.exchange.coinbase.com'
 SIGNATURE_PATH = '/users/self/verify'
 
 channel = 'ticker_batch'
 product_ids = ['BTC-USD', 'ADA-USD', "POL-USD"]
+
+
+class DBMan:
+    def __init__(self, db_name):
+        db_name = pl.Path(db_name).resolve()
+        self.conn = sqlite3.connect(db_name)
+        self.cursor = self.conn.cursor()
+
+    def close_connection(self):
+        """
+        Close the database connection.
+        """
+        self.conn.close()
 
 
 async def make_min_metrics(data: list[dict]) -> dict:
@@ -39,7 +62,7 @@ async def make_min_metrics(data: list[dict]) -> dict:
                "best_bid_size", "best_ask", "best_ask_size"]
     for metric in metrics:
         make_mmoc(metric)
-    print(f"Transformed 60s data: \n{mm_dict}")
+    logger.debug(f"Transformed 60s data: \n{mm_dict}")
 
 
 async def websocket_listener():
@@ -71,18 +94,31 @@ async def websocket_listener():
                                 info[pair] = []
                         else:
                             info[pair] = [json_response]
-                        print(f"Data Recieved for pair: {pair}")
-                        print(f"Size of {pair} buffer: {len(info[pair])}")
-                        # print(json_response)
+                        logger.debug(f"Data Recieved for pair: {pair}")
+                        logger.debug(f"Size of {pair} buffer: {len(info[pair])}")
+                        # logger(json_response)
 
         except (websockets.exceptions.ConnectionClosedError,
                 websockets.exceptions.ConnectionClosedOK):
-            print('Connection closed, retrying..')
+            logger.error('Connection closed, retrying..')
             await asyncio.sleep(1)
 
 
-if __name__ == '__main__':
+def main(opts: argparse.Namespace):
+    level = logging.INFO
+    # if opts.debug is True:
+    #     level = logging.DEBUG
+
+    logging.basicConfig(stream=sys.stdout,
+                        level=level,
+                        format='%(asctime)s %(levelname)-8s %(message)s',
+                        datefmt='%Y-%m-%d %H:%M:%S')
+    logger.info("COINWATCHDOG STARTED")
     try:
         asyncio.run(websocket_listener())
     except KeyboardInterrupt:
-        print("Exiting WebSocket..")
+        logger.info("Exiting WebSocket..")
+
+
+if __name__ == '__main__':
+    main(None)
