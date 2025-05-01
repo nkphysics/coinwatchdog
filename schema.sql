@@ -38,3 +38,7 @@ CREATE TABLE pricing_data (
     max_best_ask_size REAL,
     FOREIGN KEY (product_id) REFERENCES products(id)
 );
+
+INSERT INTO products(product_id) VALUES ("BTC-USD");
+INSERT INTO products(product_id) VALUES ("ADA-USD");
+INSERT INTO products(product_id) VALUES ("POL-USD");
