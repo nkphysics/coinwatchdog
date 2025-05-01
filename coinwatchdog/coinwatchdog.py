@@ -27,7 +27,6 @@ class DBMan:
         self.conn = sqlite3.connect(db_name)
         self.cursor = self.conn.cursor()
         self.pair_db_ids = self._get_product_ids()
-        print(self.pair_db_ids)
 
     def close_connection(self):
         """
@@ -47,6 +46,88 @@ class DBMan:
         for pair in pid_pairs:
             pair_db_ids[pair[1]] = pair[0]
         return pair_db_ids
+
+    async def _insert_pricing_data(self, data: dict) -> int:
+        """
+        Inserts transformed pricing data into the pricing_data table
+
+        Parameters:
+        data: dict, all the transformed pricing data
+
+        Returns:
+        int, id of the added row
+        """
+        logger.info(f"Data loading to database for {data['product_id']}"
+                    f" @ {data['last_timestamp']}")
+        data["product_id"] = self.pair_db_ids[data["product_id"]]
+        self.cursor.execute("""INSERT INTO pricing_data (
+                                product_id,
+                                last_timestamp,
+                                open_price,
+                                close_price,
+                                min_price,
+                                max_price,
+                                open_volume_24h,
+                                close_volume_24h,
+                                min_volume_24h,
+                                max_volume_24h,
+                                open_volume_30d,
+                                close_volume_30d,
+                                min_volume_30d,
+                                max_volume_30d,
+                                open_best_bid,
+                                close_best_bid,
+                                min_best_bid,
+                                max_best_bid,
+                                open_best_bid_size,
+                                close_best_bid_size,
+                                min_best_bid_size,
+                                max_best_bid_size,
+                                open_best_ask,
+                                close_best_ask,
+                                min_best_ask,
+                                max_best_ask,
+                                open_best_ask_size,
+                                close_best_ask_size,
+                                min_best_ask_size,
+                                max_best_ask_size
+                            )
+                               VALUES (
+                                :product_id,
+                                :last_timestamp,
+                                :open_price,
+                                :close_price,
+                                :min_price,
+                                :max_price,
+                                :open_volume_24h,
+                                :close_volume_24h,
+                                :min_volume_24h,
+                                :max_volume_24h,
+                                :open_volume_30d,
+                                :close_volume_30d,
+                                :min_volume_30d,
+                                :max_volume_30d,
+                                :open_best_bid,
+                                :close_best_bid,
+                                :min_best_bid,
+                                :max_best_bid,
+                                :open_best_bid_size,
+                                :close_best_bid_size,
+                                :min_best_bid_size,
+                                :max_best_bid_size,
+                                :open_best_ask,
+                                :close_best_ask,
+                                :min_best_ask,
+                                :max_best_ask,
+                                :open_best_ask_size,
+                                :close_best_ask_size,
+                                :min_best_ask_size,
+                                :max_best_ask_size
+                               )""",
+                               data)
+        self.conn.commit()
+        return self.cursor.lastrowid
+
 
 async def make_min_metrics(data: list[dict]) -> dict:
     """
@@ -77,6 +158,7 @@ async def make_min_metrics(data: list[dict]) -> dict:
     for metric in metrics:
         make_mmoc(metric)
     logger.debug(f"Transformed 60s data: \n{mm_dict}")
+    return mm_dict
 
 
 async def websocket_listener(db_name):
@@ -103,14 +185,17 @@ async def websocket_listener(db_name):
                     if json_response["type"] == "ticker":
                         pair = json_response["product_id"]
                         if pair in info:
-                            info[pair].append(json_response)
-                            if len(info[pair]) == 12:
-                                await make_min_metrics(info[pair].copy())
+                            ipair = info[pair]
+                            ipair.append(json_response)
+                            if len(ipair) == 12:
+                                block = await make_min_metrics(ipair.copy())
+                                await db._insert_pricing_data(block)
                                 info[pair] = []
                         else:
                             info[pair] = [json_response]
                         logger.debug(f"Data Recieved for pair: {pair}")
-                        logger.debug(f"Size of {pair} buffer: {len(info[pair])}")
+                        logger.debug(f"Size of {pair} buffer: "
+                                     f"{len(info[pair])}")
                         # logger(json_response)
 
         except (websockets.exceptions.ConnectionClosedError,
