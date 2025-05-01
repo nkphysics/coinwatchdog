@@ -1,3 +1,5 @@
+from datetime import datetime
+from datetime import timedelta
 import pathlib as pl
 import argparse
 import logging
@@ -129,6 +131,23 @@ class DBMan:
         return self.cursor.lastrowid
 
 
+async def time_diff(time1: str, time2: str) -> int:
+    """
+    Computes the difference between two different iso format timestamps
+
+    Parameters:
+    time1: str, first time in iso zulu format
+
+    time2: str, subsequent (future) time in iso zulu format
+
+    Returns:
+    int, minutes between times
+    """
+    dt1 = datetime.fromisoformat(time1[:-1])
+    dt2 = datetime.fromisoformat(time2[:-1])
+    return (dt2 - dt1).seconds // 60
+
+
 async def make_min_metrics(data: list[dict]) -> dict:
     """
     Makes all relevant metrics from the past 1 minute of data
@@ -187,10 +206,13 @@ async def websocket_listener(db_name):
                         if pair in info:
                             ipair = info[pair]
                             ipair.append(json_response)
-                            if len(ipair) == 12:
-                                block = await make_min_metrics(ipair.copy())
-                                await db._insert_pricing_data(block)
-                                info[pair] = []
+                            if len(ipair) > 1:
+                                tdiff = await time_diff(ipair[0]["time"],
+                                                        ipair[-1]["time"])
+                                if tdiff >= 1:
+                                    block = await make_min_metrics(ipair.copy())
+                                    await db._insert_pricing_data(block)
+                                    info[pair] = []
                         else:
                             info[pair] = [json_response]
                         logger.debug(f"Data Recieved for pair: {pair}")
