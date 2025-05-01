@@ -11,7 +11,7 @@ import websockets
 
 
 COINWATCHDOG = os.path.basename(sys.argv[0])
-# VERSION = version('COINWATCHDOG')
+VERSION = version('COINWATCHDOG')
 logger = logging.getLogger(COINWATCHDOG)
 
 URI = 'wss://ws-feed.exchange.coinbase.com'
@@ -26,6 +26,8 @@ class DBMan:
         db_name = pl.Path(db_name).resolve()
         self.conn = sqlite3.connect(db_name)
         self.cursor = self.conn.cursor()
+        self.pair_db_ids = self._get_product_ids()
+        print(self.pair_db_ids)
 
     def close_connection(self):
         """
@@ -33,6 +35,18 @@ class DBMan:
         """
         self.conn.close()
 
+    def _get_product_ids(self) -> dict:
+        """
+        Gets all database int id pairs for each product_id
+
+        Returns:
+        dict, dictionary with product_id str: product_id int
+        """
+        pair_db_ids = {}
+        pid_pairs = self.cursor.execute("""SELECT * FROM products;""")
+        for pair in pid_pairs:
+            pair_db_ids[pair[1]] = pair[0]
+        return pair_db_ids
 
 async def make_min_metrics(data: list[dict]) -> dict:
     """
@@ -65,7 +79,7 @@ async def make_min_metrics(data: list[dict]) -> dict:
     logger.debug(f"Transformed 60s data: \n{mm_dict}")
 
 
-async def websocket_listener():
+async def websocket_listener(db_name):
     subscribe_message = json.dumps({
         'type': 'subscribe',
         'channels': [{'name': channel, 'product_ids': product_ids}],
@@ -76,6 +90,7 @@ async def websocket_listener():
         'channels': [{'name': channel, 'product_ids': product_ids}],
     })
 
+    db = DBMan(db_name)
     info = {}
 
     while True:
@@ -108,14 +123,14 @@ def cli():
     p = argparse.ArgumentParser(
         description=("ETL pipeline tool for coinbase market data")
     )
-    # p.add_argument(
-    #     "--database",
-    #     "-db",
-    #     type=str,
-    #     default=None,
-    #     dest="database",
-    #     help="Path to sqlite database to connect to"
-    # )
+    p.add_argument(
+        "--database",
+        "-db",
+        type=str,
+        default=None,
+        dest="database",
+        help="Path to sqlite database to connect to"
+    )
     p.add_argument(
         "--log",
         "-l",
@@ -131,11 +146,11 @@ def cli():
         dest="debug",
         help="Engage debug mode for logging"
     )
-    # p.add_argument(
-    #     "--version",
-    #     action="version",
-    #     version=f"%(prog)s {VERSION}"
-    # )
+    p.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {VERSION}"
+    )
     argp = p.parse_args()
     return argp
 
@@ -157,11 +172,11 @@ def main(opts: argparse.Namespace):
                         datefmt='%Y-%m-%d %H:%M:%S')
     logger.info("COINWATCHDOG STARTED")
     try:
-        asyncio.run(websocket_listener())
+        asyncio.run(websocket_listener(opts.database))
     except KeyboardInterrupt:
         logger.info("Exiting WebSocket..")
 
 
-if __name__ == '__main__':
+def entry():
     opts = cli()
     main(opts)
