@@ -20,7 +20,6 @@ URI = 'wss://ws-feed.exchange.coinbase.com'
 SIGNATURE_PATH = '/users/self/verify'
 
 channel = 'ticker_batch'
-product_ids = ['BTC-USD', 'ADA-USD', "POL-USD"]
 
 
 class DBMan:
@@ -126,7 +125,7 @@ class DBMan:
                                 :min_best_ask_size,
                                 :max_best_ask_size
                                )""",
-                               data)
+                            data)
         self.conn.commit()
         return self.cursor.lastrowid
 
@@ -181,17 +180,14 @@ async def make_min_metrics(data: list[dict]) -> dict:
 
 
 async def websocket_listener(db_name):
+
+    db = DBMan(db_name)
+    product_ids = list(db.pair_db_ids.keys())
     subscribe_message = json.dumps({
         'type': 'subscribe',
         'channels': [{'name': channel, 'product_ids': product_ids}],
     })
 
-    unsubscribe_message = json.dumps({
-        'type': 'unsubscribe',
-        'channels': [{'name': channel, 'product_ids': product_ids}],
-    })
-
-    db = DBMan(db_name)
     info = {}
 
     while True:
