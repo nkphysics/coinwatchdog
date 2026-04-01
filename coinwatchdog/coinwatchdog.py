@@ -188,14 +188,22 @@ async def websocket_listener(db_name):
         'channels': [{'name': channel, 'product_ids': product_ids}],
     })
 
-    info = {}
+    reconnect_attempt = 0
 
     while True:
+        info = {}
         try:
-            async with websockets.connect(URI, ping_interval=None) as socket:
+            async with websockets.connect(
+                URI, ping_interval=20, ping_timeout=20
+            ) as socket:
                 await socket.send(subscribe_message)
+                logger.info(f"Connected to {URI}")
+                logger.info(f"Subscribed to {channel} for {product_ids}")
+                reconnect_attempt = 0
                 while True:
-                    response = await socket.recv()
+                    response = await asyncio.wait_for(
+                        socket.recv(), timeout=60
+                    )
                     json_response = json.loads(response)
                     if json_response["type"] == "ticker":
                         pair = json_response["product_id"]
@@ -206,7 +214,9 @@ async def websocket_listener(db_name):
                                 tdiff = await time_diff(ipair[0]["time"],
                                                         ipair[-1]["time"])
                                 if tdiff >= 1:
-                                    block = await make_min_metrics(ipair.copy())
+                                    block = await make_min_metrics(
+                                        ipair.copy()
+                                    )
                                     await db._insert_pricing_data(block)
                                     info[pair] = []
                         else:
@@ -217,9 +227,37 @@ async def websocket_listener(db_name):
                         # logger(json_response)
 
         except (websockets.exceptions.ConnectionClosedError,
-                websockets.exceptions.ConnectionClosedOK):
-            logger.error('Connection closed, retrying..')
-            await asyncio.sleep(1)
+                websockets.exceptions.ConnectionClosedOK) as e:
+            reconnect_attempt += 1
+            delay = min(2 ** reconnect_attempt, 60)
+            logger.error(f"Connection closed ({e}), "
+                         f"reconnecting in {delay}s "
+                         f"(attempt {reconnect_attempt})..")
+            await asyncio.sleep(delay)
+
+        except asyncio.TimeoutError:
+            reconnect_attempt += 1
+            delay = min(2 ** reconnect_attempt, 60)
+            logger.error(f"No message received within 60s, "
+                         f"reconnecting in {delay}s "
+                         f"(attempt {reconnect_attempt})..")
+            await asyncio.sleep(delay)
+
+        except (OSError, websockets.exceptions.InvalidHandshake) as e:
+            reconnect_attempt += 1
+            delay = min(2 ** reconnect_attempt, 60)
+            logger.error(f"Connection error ({e}), "
+                         f"reconnecting in {delay}s "
+                         f"(attempt {reconnect_attempt})..")
+            await asyncio.sleep(delay)
+
+        except Exception as e:
+            reconnect_attempt += 1
+            delay = min(2 ** reconnect_attempt, 60)
+            logger.error(f"Unexpected error ({type(e).__name__}: {e}), "
+                         f"reconnecting in {delay}s "
+                         f"(attempt {reconnect_attempt})..")
+            await asyncio.sleep(delay)
 
 
 def cli():
