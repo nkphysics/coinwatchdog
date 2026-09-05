@@ -1,0 +1,32 @@
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg18
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: coinwatchdog-admin
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: coinwatchdog
+    volumes:
+      - pg_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U coinwatchdog-admin -d coinwatchdog"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  coinwatchdog:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    environment:
+      - COINWATCHDOG_DBUSER=coinwatchdog-admin
+      - COINWATCHDOG_DBPASS=postgres
+    volumes:
+      - ./data:/mnt/coinwatchdog
+
+volumes:
+  pg_data:
