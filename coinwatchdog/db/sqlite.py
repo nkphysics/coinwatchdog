@@ -1,5 +1,8 @@
+import logging
 import sqlite3
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 class SQLiteBackend:
@@ -38,6 +41,11 @@ class SQLiteBackend:
         """
         cur = self.conn.cursor()
         data["product_id"] = self.pair_db_ids[data["product_id"]]
+        logger.debug(
+            f"Inserting pricing data for"
+            f" product_db_id={data['product_id']}"
+            f" timestamp={data['last_timestamp']}"
+        )
         cur.execute(
             """
             INSERT INTO pricing_data (

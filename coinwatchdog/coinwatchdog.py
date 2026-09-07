@@ -217,7 +217,12 @@ async def websocket_listener(db_name):
                                     block = await make_min_metrics(
                                         ipair.copy()
                                     )
-                                    await db._insert_pricing_data(block)
+                                    logger.info(
+                                        f"Data loading to database for"
+                                        f" {block['product_id']}"
+                                        f" @ {block['last_timestamp']}"
+                                    )
+                                    await db.insert_pricing_data(block)
                                     info[pair] = []
                         else:
                             info[pair] = [json_response]

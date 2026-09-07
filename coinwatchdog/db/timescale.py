@@ -1,7 +1,10 @@
+import logging
 from datetime import datetime
 from pathlib import Path
 
 import psycopg2
+
+logger = logging.getLogger(__name__)
 
 
 class TimescaleBackend:
@@ -81,6 +84,12 @@ class TimescaleBackend:
 
         # Map product_id string to database id
         product_db_id = self.pair_db_ids[data["product_id"]]
+
+        logger.debug(
+            f"Inserting pricing data for"
+            f" product_db_id={product_db_id}"
+            f" timestamp={ts}"
+        )
 
         cur.execute(
             """
