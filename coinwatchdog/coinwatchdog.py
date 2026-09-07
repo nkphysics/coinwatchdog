@@ -6,10 +6,11 @@ import logging
 import sys
 import os
 from importlib.metadata import version
-import sqlite3
 import asyncio
 import json
 import websockets
+
+from coinwatchdog.db import get_backend, DBManager
 
 
 COINWATCHDOG = os.path.basename(sys.argv[0])
@@ -20,114 +21,6 @@ URI = 'wss://ws-feed.exchange.coinbase.com'
 SIGNATURE_PATH = '/users/self/verify'
 
 channel = 'ticker_batch'
-
-
-class DBMan:
-    def __init__(self, db_name):
-        db_name = pl.Path(db_name).resolve()
-        self.conn = sqlite3.connect(db_name)
-        self.cursor = self.conn.cursor()
-        self.pair_db_ids = self._get_product_ids()
-
-    def close_connection(self):
-        """
-        Close the database connection.
-        """
-        self.conn.close()
-
-    def _get_product_ids(self) -> dict:
-        """
-        Gets all database int id pairs for each product_id
-
-        Returns:
-        dict, dictionary with product_id str: product_id int
-        """
-        pair_db_ids = {}
-        pid_pairs = self.cursor.execute("""SELECT * FROM products;""")
-        for pair in pid_pairs:
-            pair_db_ids[pair[1]] = pair[0]
-        return pair_db_ids
-
-    async def _insert_pricing_data(self, data: dict) -> int:
-        """
-        Inserts transformed pricing data into the pricing_data table
-
-        Parameters:
-        data: dict, all the transformed pricing data
-
-        Returns:
-        int, id of the added row
-        """
-        logger.info(f"Data loading to database for {data['product_id']}"
-                    f" @ {data['last_timestamp']}")
-        data["product_id"] = self.pair_db_ids[data["product_id"]]
-        self.cursor.execute("""INSERT INTO pricing_data (
-                                product_id,
-                                last_timestamp,
-                                open_price,
-                                close_price,
-                                min_price,
-                                max_price,
-                                open_volume_24h,
-                                close_volume_24h,
-                                min_volume_24h,
-                                max_volume_24h,
-                                open_volume_30d,
-                                close_volume_30d,
-                                min_volume_30d,
-                                max_volume_30d,
-                                open_best_bid,
-                                close_best_bid,
-                                min_best_bid,
-                                max_best_bid,
-                                open_best_bid_size,
-                                close_best_bid_size,
-                                min_best_bid_size,
-                                max_best_bid_size,
-                                open_best_ask,
-                                close_best_ask,
-                                min_best_ask,
-                                max_best_ask,
-                                open_best_ask_size,
-                                close_best_ask_size,
-                                min_best_ask_size,
-                                max_best_ask_size
-                            )
-                               VALUES (
-                                :product_id,
-                                :last_timestamp,
-                                :open_price,
-                                :close_price,
-                                :min_price,
-                                :max_price,
-                                :open_volume_24h,
-                                :close_volume_24h,
-                                :min_volume_24h,
-                                :max_volume_24h,
-                                :open_volume_30d,
-                                :close_volume_30d,
-                                :min_volume_30d,
-                                :max_volume_30d,
-                                :open_best_bid,
-                                :close_best_bid,
-                                :min_best_bid,
-                                :max_best_bid,
-                                :open_best_bid_size,
-                                :close_best_bid_size,
-                                :min_best_bid_size,
-                                :max_best_bid_size,
-                                :open_best_ask,
-                                :close_best_ask,
-                                :min_best_ask,
-                                :max_best_ask,
-                                :open_best_ask_size,
-                                :close_best_ask_size,
-                                :min_best_ask_size,
-                                :max_best_ask_size
-                               )""",
-                            data)
-        self.conn.commit()
-        return self.cursor.lastrowid
 
 
 async def time_diff(time1: str, time2: str) -> int:
@@ -179,9 +72,8 @@ async def make_min_metrics(data: list[dict]) -> dict:
     return mm_dict
 
 
-async def websocket_listener(db_name):
+async def websocket_listener(db: DBManager):
 
-    db = DBMan(db_name)
     product_ids = list(db.pair_db_ids.keys())
     subscribe_message = json.dumps({
         'type': 'subscribe',
@@ -297,6 +189,50 @@ def cli():
         action="version",
         version=f"%(prog)s {VERSION}"
     )
+    p.add_argument(
+        "--backend",
+        "-b",
+        type=str,
+        default="auto",
+        choices=["timescaledb", "sqlite", "auto"],
+        dest="backend",
+        help="Database backend: timescaledb, sqlite, or auto (default: auto)"
+    )
+    p.add_argument(
+        "--tsdb-host",
+        type=str,
+        default="localhost",
+        dest="tsdb_host",
+        help="TimescaleDB host (default: localhost)"
+    )
+    p.add_argument(
+        "--tsdb-port",
+        type=int,
+        default=5432,
+        dest="tsdb_port",
+        help="TimescaleDB port (default: 5432)"
+    )
+    p.add_argument(
+        "--tsdb-name",
+        type=str,
+        default="coinwatchdog",
+        dest="tsdb_name",
+        help="TimescaleDB database name (default: coinwatchdog)"
+    )
+    p.add_argument(
+        "--tsdb-user",
+        type=str,
+        default="coinwatchdog-admin",
+        dest="tsdb_user",
+        help="TimescaleDB username (default: coinwatchdog-admin)"
+    )
+    p.add_argument(
+        "--tsdb-pass",
+        type=str,
+        default=None,
+        dest="tsdb_pass",
+        help="TimescaleDB password (or set COINWATCHDOG_DBPASS env var)"
+    )
     argp = p.parse_args()
     return argp
 
@@ -317,8 +253,25 @@ def main(opts: argparse.Namespace):
                         format='%(asctime)s %(levelname)-8s %(message)s',
                         datefmt='%Y-%m-%d %H:%M:%S')
     logger.info("COINWATCHDOG STARTED")
+
+    # Resolve password from env var if not provided via CLI
+    tsdb_pass = opts.tsdb_pass or os.environ.get("COINWATCHDOG_DBPASS")
+    tsdb_user = opts.tsdb_user or os.environ.get("COINWATCHDOG_DBUSER")
+
+    db = get_backend(
+        opts.backend,
+        # TimescaleDB params
+        host=opts.tsdb_host,
+        port=opts.tsdb_port,
+        dbname=opts.tsdb_name,
+        user=tsdb_user,
+        password=tsdb_pass,
+        # SQLite fallback
+        db_path=opts.database,
+    )
+
     try:
-        asyncio.run(websocket_listener(opts.database))
+        asyncio.run(websocket_listener(db))
     except KeyboardInterrupt:
         logger.info("Exiting WebSocket..")
 
