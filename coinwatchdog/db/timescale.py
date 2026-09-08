@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -66,17 +67,17 @@ class TimescaleBackend:
         cur.execute("SELECT id, product_id FROM products")
         return {row[1]: row[0] for row in cur.fetchall()}
 
-    async def insert_pricing_data(self, data: dict) -> int:
+    async def insert_pricing_data(self, data: dict) -> None:
         """
         Insert a row of aggregated pricing metrics.
 
         Parameters:
             data: dict containing product_id, last_timestamp, and all
                   open/close/min/max price/volume/bid/ask metrics
-
-        Returns:
-            int: id of the inserted row
         """
+        await asyncio.to_thread(self._insert_pricing_data_sync, data)
+
+    def _insert_pricing_data_sync(self, data: dict) -> None:
         cur = self.conn.cursor()
 
         # Convert ISO timestamp string to Python datetime
@@ -196,8 +197,6 @@ class TimescaleBackend:
         except psycopg2.Error:
             self.conn.rollback()
             raise
-
-        return None
 
     def is_healthy(self) -> bool:
         """
