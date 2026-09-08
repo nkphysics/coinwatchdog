@@ -17,6 +17,7 @@ class TimescaleBackend:
         dbname: str,
         user: str,
         password: str,
+        **kwargs,
     ):
         """
         Connect to TimescaleDB and initialize schema if needed.
@@ -46,7 +47,7 @@ class TimescaleBackend:
         on every startup.
         """
         schema_path = (
-            Path(__file__).parent.parent.parent / "tsdb_schema.sql"
+            Path(__file__).parent / "schema" / "timescaledb-schema.sql"
         )
         with open(schema_path, "r") as f:
             schema_sql = f.read()
@@ -65,7 +66,7 @@ class TimescaleBackend:
         cur.execute("SELECT id, product_id FROM products")
         return {row[1]: row[0] for row in cur.fetchall()}
 
-    def insert_pricing_data(self, data: dict) -> int:
+    async def insert_pricing_data(self, data: dict) -> int:
         """
         Insert a row of aggregated pricing metrics.
 
@@ -91,108 +92,112 @@ class TimescaleBackend:
             f" timestamp={ts}"
         )
 
-        cur.execute(
-            """
-            INSERT INTO pricing_data (
-                timestamp,
-                product_id,
-                open_price,
-                close_price,
-                min_price,
-                max_price,
-                open_volume_24h,
-                close_volume_24h,
-                min_volume_24h,
-                max_volume_24h,
-                open_volume_30d,
-                close_volume_30d,
-                min_volume_30d,
-                max_volume_30d,
-                open_best_bid,
-                close_best_bid,
-                min_best_bid,
-                max_best_bid,
-                open_best_bid_size,
-                close_best_bid_size,
-                min_best_bid_size,
-                max_best_bid_size,
-                open_best_ask,
-                close_best_ask,
-                min_best_ask,
-                max_best_ask,
-                open_best_ask_size,
-                close_best_ask_size,
-                min_best_ask_size,
-                max_best_ask_size
-            ) VALUES (
-                %(timestamp)s,
-                %(product_id)s,
-                %(open_price)s,
-                %(close_price)s,
-                %(min_price)s,
-                %(max_price)s,
-                %(open_volume_24h)s,
-                %(close_volume_24h)s,
-                %(min_volume_24h)s,
-                %(max_volume_24h)s,
-                %(open_volume_30d)s,
-                %(close_volume_30d)s,
-                %(min_volume_30d)s,
-                %(max_volume_30d)s,
-                %(open_best_bid)s,
-                %(close_best_bid)s,
-                %(min_best_bid)s,
-                %(max_best_bid)s,
-                %(open_best_bid_size)s,
-                %(close_best_bid_size)s,
-                %(min_best_bid_size)s,
-                %(max_best_bid_size)s,
-                %(open_best_ask)s,
-                %(close_best_ask)s,
-                %(min_best_ask)s,
-                %(max_best_ask)s,
-                %(open_best_ask_size)s,
-                %(close_best_ask_size)s,
-                %(min_best_ask_size)s,
-                %(max_best_ask_size)s
-            ) RETURNING id
-            """,
-            {
-                "timestamp": ts,
-                "product_id": product_db_id,
-                "open_price": data["open_price"],
-                "close_price": data["close_price"],
-                "min_price": data["min_price"],
-                "max_price": data["max_price"],
-                "open_volume_24h": data["open_volume_24h"],
-                "close_volume_24h": data["close_volume_24h"],
-                "min_volume_24h": data["min_volume_24h"],
-                "max_volume_24h": data["max_volume_24h"],
-                "open_volume_30d": data["open_volume_30d"],
-                "close_volume_30d": data["close_volume_30d"],
-                "min_volume_30d": data["min_volume_30d"],
-                "max_volume_30d": data["max_volume_30d"],
-                "open_best_bid": data["open_best_bid"],
-                "close_best_bid": data["close_best_bid"],
-                "min_best_bid": data["min_best_bid"],
-                "max_best_bid": data["max_best_bid"],
-                "open_best_bid_size": data["open_best_bid_size"],
-                "close_best_bid_size": data["close_best_bid_size"],
-                "min_best_bid_size": data["min_best_bid_size"],
-                "max_best_bid_size": data["max_best_bid_size"],
-                "open_best_ask": data["open_best_ask"],
-                "close_best_ask": data["close_best_ask"],
-                "min_best_ask": data["min_best_ask"],
-                "max_best_ask": data["max_best_ask"],
-                "open_best_ask_size": data["open_best_ask_size"],
-                "close_best_ask_size": data["close_best_ask_size"],
-                "min_best_ask_size": data["min_best_ask_size"],
-                "max_best_ask_size": data["max_best_ask_size"],
-            },
-        )
+        try:
+            cur.execute(
+                """
+                INSERT INTO pricing_data (
+                    timestamp,
+                    product_id,
+                    open_price,
+                    close_price,
+                    min_price,
+                    max_price,
+                    open_volume_24h,
+                    close_volume_24h,
+                    min_volume_24h,
+                    max_volume_24h,
+                    open_volume_30d,
+                    close_volume_30d,
+                    min_volume_30d,
+                    max_volume_30d,
+                    open_best_bid,
+                    close_best_bid,
+                    min_best_bid,
+                    max_best_bid,
+                    open_best_bid_size,
+                    close_best_bid_size,
+                    min_best_bid_size,
+                    max_best_bid_size,
+                    open_best_ask,
+                    close_best_ask,
+                    min_best_ask,
+                    max_best_ask,
+                    open_best_ask_size,
+                    close_best_ask_size,
+                    min_best_ask_size,
+                    max_best_ask_size
+                ) VALUES (
+                    %(timestamp)s,
+                    %(product_id)s,
+                    %(open_price)s,
+                    %(close_price)s,
+                    %(min_price)s,
+                    %(max_price)s,
+                    %(open_volume_24h)s,
+                    %(close_volume_24h)s,
+                    %(min_volume_24h)s,
+                    %(max_volume_24h)s,
+                    %(open_volume_30d)s,
+                    %(close_volume_30d)s,
+                    %(min_volume_30d)s,
+                    %(max_volume_30d)s,
+                    %(open_best_bid)s,
+                    %(close_best_bid)s,
+                    %(min_best_bid)s,
+                    %(max_best_bid)s,
+                    %(open_best_bid_size)s,
+                    %(close_best_bid_size)s,
+                    %(min_best_bid_size)s,
+                    %(max_best_bid_size)s,
+                    %(open_best_ask)s,
+                    %(close_best_ask)s,
+                    %(min_best_ask)s,
+                    %(max_best_ask)s,
+                    %(open_best_ask_size)s,
+                    %(close_best_ask_size)s,
+                    %(min_best_ask_size)s,
+                    %(max_best_ask_size)s
+                )
+                """,
+                {
+                    "timestamp": ts,
+                    "product_id": product_db_id,
+                    "open_price": data["open_price"],
+                    "close_price": data["close_price"],
+                    "min_price": data["min_price"],
+                    "max_price": data["max_price"],
+                    "open_volume_24h": data["open_volume_24h"],
+                    "close_volume_24h": data["close_volume_24h"],
+                    "min_volume_24h": data["min_volume_24h"],
+                    "max_volume_24h": data["max_volume_24h"],
+                    "open_volume_30d": data["open_volume_30d"],
+                    "close_volume_30d": data["close_volume_30d"],
+                    "min_volume_30d": data["min_volume_30d"],
+                    "max_volume_30d": data["max_volume_30d"],
+                    "open_best_bid": data["open_best_bid"],
+                    "close_best_bid": data["close_best_bid"],
+                    "min_best_bid": data["min_best_bid"],
+                    "max_best_bid": data["max_best_bid"],
+                    "open_best_bid_size": data["open_best_bid_size"],
+                    "close_best_bid_size": data["close_best_bid_size"],
+                    "min_best_bid_size": data["min_best_bid_size"],
+                    "max_best_bid_size": data["max_best_bid_size"],
+                    "open_best_ask": data["open_best_ask"],
+                    "close_best_ask": data["close_best_ask"],
+                    "min_best_ask": data["min_best_ask"],
+                    "max_best_ask": data["max_best_ask"],
+                    "open_best_ask_size": data["open_best_ask_size"],
+                    "close_best_ask_size": data["close_best_ask_size"],
+                    "min_best_ask_size": data["min_best_ask_size"],
+                    "max_best_ask_size": data["max_best_ask_size"],
+                },
+            )
+            self.conn.commit()
+        except psycopg2.Error:
+            self.conn.rollback()
+            raise
 
-        self.conn.commit()
-        return cur.fetchone()[0]
+        return None
 
     def is_healthy(self) -> bool:
         """
