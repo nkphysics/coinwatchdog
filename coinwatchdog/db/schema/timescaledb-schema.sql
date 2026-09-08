@@ -44,7 +44,8 @@ CREATE INDEX IF NOT EXISTS idx_pricing_product_timestamp
 ALTER TABLE pricing_data SET (
     timescaledb.compress,
     timescaledb.compress_segmentby = 'product_id',
-    timescaledb.compress_chunk_time_interval = '1 day'
+    timescaledb.compress_orderby = 'timestamp',
+    timescaledb.compress_chunk_time_interval = '7 days'
 );
 
 INSERT INTO products(product_id)
