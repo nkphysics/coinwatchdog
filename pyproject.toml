@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "coinwatchdog"
-version = "0.0.3"
+version = "0.1.0"
 description = ""
 authors = [
   {name = "Nicholas Kuechel", email = "njkuechel@protonmail.com" }
@@ -12,7 +12,8 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "websockets >= 15.0.1"
+    "websockets >= 15.0.1",
+    "psycopg2 >= 2.9.0"
 ]
 
 [project.optional-dependencies]
@@ -23,3 +24,9 @@ dev = [
 
 [project.scripts]
 coinwatchdog = 'coinwatchdog:entry'
+
+[tool.setuptools.packages.find]
+include = ["coinwatchdog*"]
+
+[tool.setuptools.package-data]
+"coinwatchdog" = ["db/schema/*.sql"]

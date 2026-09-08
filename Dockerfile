@@ -1,11 +1,14 @@
 FROM python:3.12-slim
 
+RUN apt-get update && apt-get install -y libpq-dev gcc \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN mkdir /mnt/coinwatchdog
 WORKDIR /coinwatchdog
 COPY . .
 
-RUN apt-get update && apt-get upgrade -y \
-  && python -m pip install --upgrade pip \
-  && pip install .
+RUN python -m pip install --upgrade pip \
+    && pip install .
 
-ENTRYPOINT ["coinwatchdog", "--database", "/mnt/coinwatchdog/coinwatchdog.db", "--log", "/mnt/coinwatchdog/coinwatchdog.log"]
+ENTRYPOINT ["coinwatchdog", "--backend", "timescaledb", \
+            "--tsdb-host", "timescaledb", "--tsdb-name", "coinwatchdog"]
