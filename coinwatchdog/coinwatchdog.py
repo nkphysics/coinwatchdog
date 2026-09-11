@@ -10,7 +10,8 @@ import asyncio
 import json
 import websockets
 
-from coinwatchdog.db import get_backend, DBManager
+from coinwatchdog.db import get_backend
+from coinwatchdog.db.timescale import TimescaleBackend
 
 
 COINWATCHDOG = os.path.basename(sys.argv[0])
@@ -72,7 +73,7 @@ async def make_min_metrics(data: list[dict]) -> dict:
     return mm_dict
 
 
-async def websocket_listener(db: DBManager):
+async def websocket_listener(db):
 
     product_ids = list(db.pair_db_ids.keys())
     subscribe_message = json.dumps({
@@ -81,6 +82,7 @@ async def websocket_listener(db: DBManager):
     })
 
     reconnect_attempt = 0
+    is_timescaledb = isinstance(db, TimescaleBackend)
 
     while True:
         info = {}
@@ -98,30 +100,37 @@ async def websocket_listener(db: DBManager):
                     )
                     json_response = json.loads(response)
                     if json_response["type"] == "ticker":
-                        pair = json_response["product_id"]
-                        if pair in info:
-                            ipair = info[pair]
-                            ipair.append(json_response)
-                            if len(ipair) > 1:
-                                tdiff = await time_diff(ipair[0]["time"],
-                                                        ipair[-1]["time"])
-                                if tdiff >= 1:
-                                    block = await make_min_metrics(
-                                        ipair.copy()
-                                    )
-                                    logger.info(
-                                        f"Data loading to database for"
-                                        f" {block['product_id']}"
-                                        f" @ {block['last_timestamp']}"
-                                    )
-                                    await db.insert_pricing_data(block)
-                                    info[pair] = []
+                        if is_timescaledb:
+                            logger.debug(
+                                "Data Recieved for pair: "
+                                f"{json_response["product_id"]}"
+                                )
+                            await db.insert_ticker_row(json_response)
                         else:
-                            info[pair] = [json_response]
-                        logger.debug(f"Data Recieved for pair: {pair}")
-                        logger.debug(f"Size of {pair} buffer: "
-                                     f"{len(info[pair])}")
-                        # logger(json_response)
+                            pair = json_response["product_id"]
+                            if pair in info:
+                                ipair = info[pair]
+                                ipair.append(json_response)
+                                if len(ipair) > 1:
+                                    tdiff = await time_diff(ipair[0]["time"],
+                                                            ipair[-1]["time"])
+                                    if tdiff >= 1:
+                                        block = await make_min_metrics(
+                                            ipair.copy()
+                                        )
+                                        logger.info(
+                                            f"Data loading to database for"
+                                            f" {block['product_id']}"
+                                            f" @ {block['last_timestamp']}"
+                                        )
+                                        await db.insert_pricing_data(block)
+                                        info[pair] = []
+                            else:
+                                info[pair] = [json_response]
+                            logger.debug(f"Data Recieved for pair: {pair}")
+                            logger.debug(f"Size of {pair} buffer: "
+                                         f"{len(info[pair])}")
+                        # print(json_response) if the ws json changes
 
         except (websockets.exceptions.ConnectionClosedError,
                 websockets.exceptions.ConnectionClosedOK) as e:
