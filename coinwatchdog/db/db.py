@@ -1,44 +1,4 @@
-from abc import ABC, abstractmethod
-
-
-class DBManager(ABC):
-
-    @abstractmethod
-    def get_product_ids(self) -> dict:
-        """
-        Get all product_id to database id mappings.
-
-        Returns:
-            dict: {product_id_str: db_id_int}
-        """
-        pass
-
-    @abstractmethod
-    def insert_pricing_data(self, data: dict) -> int:
-        """
-        Insert a row of aggregated pricing metrics.
-
-        Parameters:
-            data: dict containing product_id, last_timestamp, and all
-                  open/close/min/max price/volume/bid/ask metrics
-
-        Returns:
-            int: id of the inserted row
-        """
-        pass
-
-    @abstractmethod
-    def is_healthy(self) -> bool:
-        """Check if the database connection is alive."""
-        pass
-
-    @abstractmethod
-    def close(self):
-        """Close the database connection."""
-        pass
-
-
-def get_backend(backend: str, **kwargs) -> DBManager:
+def get_backend(backend: str, **kwargs):
     """
     Factory function to create the appropriate database backend.
 
@@ -47,7 +7,7 @@ def get_backend(backend: str, **kwargs) -> DBManager:
         **kwargs: Connection parameters passed to the backend constructor
 
     Returns:
-        DBManager instance
+        TimescaleBackend or SQLiteBackend instance
     """
     if backend == "timescaledb":
         from .timescale import TimescaleBackend

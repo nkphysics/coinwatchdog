@@ -1,3 +1,3 @@
-from .db import DBManager, get_backend
+from .db import get_backend
 
-__all__ = ["DBManager", "get_backend"]
+__all__ = ["get_backend"]
